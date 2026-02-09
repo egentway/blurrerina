@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  deepstream:
+    build: .
+    image: yolodeepstream:latest
+    container_name: deepstream_blur
+    volumes:
+      - ./volume:/app/volume
+    runtime: nvidia
+    network_mode: host
+    environment:
+      - DISPLAY=$DISPLAY
+    device_requests:
+      - driver: nvidia
+        count: all
+        capabilities: [gpu, video]
+    command: python3 main.py

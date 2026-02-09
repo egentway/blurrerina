@@ -1,0 +1,25 @@
+[property]
+gpu-id=0
+net-scale-factor=0.0039215697906911373
+model-engine-file=volume/models/bestV8n.engine
+# If you use the ONNX file instead, nvinfer will generate the engine.
+# onnx-model=volume/models/bestV8n.onnx
+labelfile-path=labels.txt
+batch-size=1
+network-mode=1
+num-detected-classes=80
+interval=0
+gie-unique-id=1
+process-mode=1
+network-type=0
+cluster-mode=2
+maintain-aspect-ratio=1
+parse-bbox-func-name=NvDsInferParseYolo
+custom-lib-path=nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so
+# If using YOLOv8, we need these:
+engine-create-func-name=NvDsInferYoloCudaEngineGet
+
+[class-attrs-all]
+pre-cluster-threshold=0.25
+topk=300
+nms-iou-threshold=0.45
