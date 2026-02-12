@@ -28,12 +28,24 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
                 obj_meta = pyds.NvDsObjectMeta.cast(l_obj.data)
             except StopIteration:
                 break
-            
-            # Here we can filter which objects should be blurred.
-            # By default, nvdsblur blurs objects depending on its configuration.
-            # Some versions use the obj_meta.mask_params to decide.
-            
-            try: 
+
+            # Oscura (blackout) le regioni degli oggetti rilevati delle classi target
+            if obj_meta.class_id in TARGET_CLASSES:
+                display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
+                rect_params = display_meta.rect_params[display_meta.num_rects]
+                rect_params.left = int(obj_meta.rect_params.left)
+                rect_params.top = int(obj_meta.rect_params.top)
+                rect_params.width = int(obj_meta.rect_params.width)
+                rect_params.height = int(obj_meta.rect_params.height)
+                rect_params.border_width = 0
+                rect_params.has_bg_color = 1
+                rect_params.bg_color.set(0.0, 0.0, 0.0, 1.0)  # Nero opaco
+                rect_params.has_border_color = 0
+                rect_params.filled = 1
+                display_meta.num_rects += 1
+                pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta)
+
+            try:
                 l_obj = l_obj.next
             except StopIteration:
                 break
@@ -54,20 +66,18 @@ def main():
         print(f"Input file {input_file} not found!")
         return
 
-    # Pipeline definition using Gst.parse_launch for simplicity
-    # nvdsblur: blurs objects detected by nvinfer
-    # nvv4l2h264enc: hardware H264 encoder on Jetson
-    pipeline_str = (
-        f"filesrc location={input_file} ! "
-        f"qtdemux ! h264parse ! nvv4l2decoder ! "
-        f"nvstreammux name=mux width=1920 height=1080 batch-size=1 ! "
-        f"nvinfer name=pgie config-file-path={config_file} ! "
-        f"nvdsblur blur-objects=1 ! "
-        f"nvvideoconvert ! nvdsosd ! "
-        f"nvvideoconvert ! 'video/x-raw(memory:NVMM), format=I420' ! "
-        f"nvv4l2h264enc bitrate=4000000 ! h264parse ! qtmux ! "
-        f"filesink location={output_file}"
-    )
+    # Definizione pipeline senza nvdsblur, usando nvdsosd per blackout
+    pipeline_str = f"""
+        filesrc location={input_file} !
+        qtdemux ! h264parse ! decodebin !
+        videoconvert ! nvvideoconvert !
+        video/x-raw(memory:NVMM), format=NV12 !
+        nvinfer name=pgie config-file-path={config_file} !
+        nvvideoconvert ! nvdsosd !
+        nvvideoconvert ! video/x-raw,format=I420 !
+        x264enc bitrate=4000 ! h264parse ! qtmux !
+        filesink location={output_file}
+    """
 
     print(f"Constructing pipeline...")
     pipeline = Gst.parse_launch(pipeline_str)
