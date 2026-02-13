@@ -10,8 +10,8 @@ import time
 import shutil
 
 # Classes to blur (check your labels.txt)
-# Usually 0 is person, but adjust according to your fine-tuned model
-TARGET_CLASSES = [2] 
+# Usually 0 is person. If you see boxes but no blurring, check your class IDs.
+TARGET_CLASSES = [0, 2] 
 
 def pgie_src_pad_buffer_probe(pad, info, u_data):
     gst_buffer = info.get_buffer()
@@ -33,19 +33,16 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
             except StopIteration:
                 break
 
-            # Oscura le regioni degli oggetti rilevati delle classi target
+            # Modifica gli oggetti delle classi target per oscurarli
             if obj_meta.class_id in TARGET_CLASSES:
-                display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
-                rect_params = display_meta.rect_params[display_meta.num_rects]
-                rect_params.left = int(obj_meta.rect_params.left)
-                rect_params.top = int(obj_meta.rect_params.top)
-                rect_params.width = int(obj_meta.rect_params.width)
-                rect_params.height = int(obj_meta.rect_params.height)
-                rect_params.border_width = 0
-                rect_params.has_bg_color = 1
-                rect_params.bg_color.set(0.0, 0.0, 0.0, 1.0)  # Nero opaco
-                display_meta.num_rects += 1
-                pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta)
+                # Modifichiamo direttamente rect_params dell'oggetto per renderlo un rettangolo nero
+                obj_meta.rect_params.border_width = 0
+                obj_meta.rect_params.has_bg_color = 1
+                obj_meta.rect_params.bg_color.set(0.0, 0.0, 0.0, 1.0)  # Nero opaco
+                
+                # Rimuoviamo il testo dell'etichetta
+                obj_meta.text_params.display_text = ""
+                obj_meta.text_params.set_bg_clr = 0
 
             try:
                 l_obj = l_obj.next
@@ -71,13 +68,6 @@ def main():
         print(f"Input file {input_file} not found!")
         return
 
-    # Definizione pipeline con nvstreammux (obbligatorio per i metadati batch)
-    # filesrc location={path} !
-    # decodebin ! queue !
-    # nvvidconv ! video/x-raw,format=BGRx !
-    # videoconvert ! video/x-raw,format=BGR !
-    # appsink sync=false drop=false max-buffers=300
-    # Definizione pipeline con nvstreammux e pad espliciti
     pipeline_str = f"""
         filesrc location={input_file} !
         qtdemux ! h264parse ! decodebin !
