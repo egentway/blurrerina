@@ -1,3 +1,4 @@
+from pathlib import Path
 import sys
 import gi
 gi.require_version('Gst', '1.0')
@@ -5,9 +6,12 @@ from gi.repository import Gst, GLib
 import os
 import pyds
 
+import time
+import shutil
+
 # Classes to blur (check your labels.txt)
 # Usually 0 is person, but adjust according to your fine-tuned model
-TARGET_CLASSES = [0] 
+TARGET_CLASSES = [2] 
 
 def pgie_src_pad_buffer_probe(pad, info, u_data):
     gst_buffer = info.get_buffer()
@@ -29,7 +33,7 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
             except StopIteration:
                 break
 
-            # Oscura (blackout) le regioni degli oggetti rilevati delle classi target
+            # Oscura le regioni degli oggetti rilevati delle classi target
             if obj_meta.class_id in TARGET_CLASSES:
                 display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
                 rect_params = display_meta.rect_params[display_meta.num_rects]
@@ -40,8 +44,6 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
                 rect_params.border_width = 0
                 rect_params.has_bg_color = 1
                 rect_params.bg_color.set(0.0, 0.0, 0.0, 1.0)  # Nero opaco
-                rect_params.has_border_color = 0
-                rect_params.filled = 1
                 display_meta.num_rects += 1
                 pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta)
 
@@ -56,25 +58,37 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
     return Gst.PadProbeReturn.OK
 
 def main():
+    start_time = time.perf_counter()
     Gst.init(None)
 
-    input_file = "/app/volume/data/input.mp4"
-    output_file = "/app/volume/output/output.mp4"
-    config_file = "/app/volume/config/config_infer_primary.txt"
+    base_path = Path("/app/volume")
+    input_file = base_path / "data/input.mp4"
+    output_file = base_path / "output/output.mp4"
+    config_file = base_path / "config/config_infer_primary.txt"
+    models_path = base_path / "models"
     
     if not os.path.exists(input_file):
         print(f"Input file {input_file} not found!")
         return
 
-    # Definizione pipeline senza nvdsblur, usando nvdsosd per blackout
+    # Definizione pipeline con nvstreammux (obbligatorio per i metadati batch)
+    # filesrc location={path} !
+    # decodebin ! queue !
+    # nvvidconv ! video/x-raw,format=BGRx !
+    # videoconvert ! video/x-raw,format=BGR !
+    # appsink sync=false drop=false max-buffers=300
+    # Definizione pipeline con nvstreammux e pad espliciti
     pipeline_str = f"""
         filesrc location={input_file} !
         qtdemux ! h264parse ! decodebin !
-        videoconvert ! nvvideoconvert !
+        nvvideoconvert !
         video/x-raw(memory:NVMM), format=NV12 !
+        mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1080 !
         nvinfer name=pgie config-file-path={config_file} !
-        nvvideoconvert ! nvdsosd !
-        nvvideoconvert ! video/x-raw,format=I420 !
+        nvvideoconvert !
+        nvdsosd !
+        nvvideoconvert !
+        video/x-raw,format=I420 !
         x264enc bitrate=4000 ! h264parse ! qtmux !
         filesink location={output_file}
     """
@@ -112,6 +126,11 @@ def main():
     
     print("Closing...")
     pipeline.set_state(Gst.State.NULL)
+    end_time = time.perf_counter()
+    print(f"Total processing time: {end_time - start_time:.2f} seconds")
+    
+    for model_file in Path().glob("*.engine"):
+        shutil.copy(model_file, models_path / model_file.name)
 
 if __name__ == '__main__':
     main()

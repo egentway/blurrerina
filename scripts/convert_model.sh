@@ -25,6 +25,6 @@ EXPORT_SCRIPT="$WORKDIR/DeepStream-Yolo/utils/export_$MODEL_VERSION.py"
 cd "$MODEL_DIR"
 python3 $EXPORT_SCRIPT \
   --simplify \
-  --dynamic \
   --opset 18 \
+  --size 640 640 \
   -w "$MODEL_PATH"

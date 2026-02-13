@@ -20,5 +20,8 @@ RUN cd ultralytics && pip install onnxscript onnxslim && pip install -e ".[expor
 
 COPY --chmod=755 scripts/convert_model.sh .
 COPY --chmod=755 scripts/make_yolo_parser.sh .
+COPY --chmod=755 scripts/entrypoint.sh .
+COPY --chmod=755 blurrerina blurrerina
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["python3", "blurrerina/main.py"]
