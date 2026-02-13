@@ -1,29 +1,27 @@
-services:
-  blurrerina:
-    build: .
-    image: blurrerina:latest
-    container_name: blurrerina
-    volumes:
-      - ./volume:/app/volume
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - /tmp/argus_socket:/tmp/argus_socket
-    runtime: nvidia
-    network_mode: host
-    environment:
-      - DISPLAY=${DISPLAY:-:0}
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - QT_QPA_PLATFORM=offscreen
+x-yolo-base: &yolo-base
+  build:
+    context: .
+  image: prepare_yolo:latest
+  runtime: nvidia
+  network_mode: host
+  volumes:
+    - /home/jetson/volume:/app/volume
+  working_dir: /app
+  environment:
+    - NVIDIA_VISIBLE_DEVICES=all
+    - NVIDIA_DRIVER_CAPABILITIES=all
 
-  yoloutils:
-    image: ultralytics/ultralytics:latest-jetson-jetpack6
-    container_name: yoloutils
-    runtime: nvidia
-    network_mode: host
-    volumes:
-      - ./volume:/workspace/volume
-    working_dir: /workspace
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-    entrypoint: ["/bin/bash"]
+services:
+  convert_model:
+    <<: *yolo-base
+    container_name: convert_model
+    entrypoint: ["/bin/bash", "convert_model.sh"]
+
+  make_yolo_parser:
+    <<: *yolo-base
+    container_name: make_yolo_parser
+    entrypoint: ["/bin/bash", "make_yolo_parser.sh"]
+  
+  blurrerina:
+    <<: *yolo-base
+    container_name: blurrerina

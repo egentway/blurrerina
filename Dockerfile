@@ -1,13 +1,24 @@
-# Use the official DeepStream L4T image
-FROM nvcr.io/nvidia/deepstream-l4t:7.1-triton-multiarch
+FROM nvcr.io/nvidia/deepstream:7.1-triton-multiarch
+
+RUN mkdir /app
+WORKDIR /app
 
 RUN /opt/nvidia/deepstream/deepstream/user_additional_install.sh
-RUN /opt/nvidia/deepstream/deepstream/user_deepstream_python_apps_install.sh -v 1.2.0
+RUN /opt/nvidia/deepstream/deepstream/update_rtpmanager.sh
 
-RUN pip3 install --no-cache-dir opencv-python
+COPY --chmod=755 scripts/install_pyds.sh .
+RUN ./install_pyds.sh -v 1.2.0
 
-WORKDIR /app
-COPY config .
-COPY blurrerina .
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1
 
-CMD ["python3", "main.py"]
+RUN git clone --depth 1 https://github.com/marcoslucianops/DeepStream-Yolo.git DeepStream-Yolo
+RUN git clone --depth 1 https://github.com/ultralytics/ultralytics.git ultralytics
+RUN cd ultralytics && pip install onnxscript onnxslim && pip install -e ".[export]" && cd ..
+
+COPY --chmod=755 scripts/convert_model.sh .
+COPY --chmod=755 scripts/make_yolo_parser.sh .
+
+CMD ["python3", "blurrerina/main.py"]

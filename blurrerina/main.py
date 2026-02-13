@@ -60,7 +60,7 @@ def main():
 
     input_file = "/app/volume/data/input.mp4"
     output_file = "/app/volume/output/output.mp4"
-    config_file = "/app/config_infer_primary_yolo.txt"
+    config_file = "/app/volume/config/config_infer_primary.txt"
     
     if not os.path.exists(input_file):
         print(f"Input file {input_file} not found!")
