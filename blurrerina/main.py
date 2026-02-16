@@ -68,18 +68,17 @@ def main():
         print(f"Input file {input_file} not found!")
         return
 
+    # Jetson Orin Nano: hardware decoder, no hardware encoder
+    # Removed nvdsosd (pure overhead since we blank everything)
+    # Using avenc_mpeg4 (same as cv2.VideoWriter "mp4v")
     pipeline_str = f"""
         filesrc location={input_file} !
-        qtdemux ! h264parse ! decodebin !
-        nvvideoconvert !
+        qtdemux ! h264parse ! nvv4l2decoder ! nvvideoconvert !
         video/x-raw(memory:NVMM), format=NV12 !
         mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1080 !
         nvinfer name=pgie config-file-path={config_file} !
-        nvvideoconvert !
-        nvdsosd !
-        nvvideoconvert !
-        video/x-raw,format=I420 !
-        x264enc bitrate=4000 ! h264parse ! qtmux !
+        nvvideoconvert ! video/x-raw,format=I420 !
+        avenc_mpeg4 bitrate=4000000 ! qtmux !
         filesink location={output_file}
     """
 
@@ -119,6 +118,10 @@ def main():
     end_time = time.perf_counter()
     print(f"Total processing time: {end_time - start_time:.2f} seconds")
     
+    # If not present, DeepStream creates the model in the TensorRT .engine format 
+    # in the current folder. To avoid needing regenerating it each time, we move it
+    # to a persistent location.
+
     for model_file in Path().glob("*.engine"):
         shutil.copy(model_file, models_path / model_file.name)
 
