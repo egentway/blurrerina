@@ -10,6 +10,7 @@ x-yolo-base: &yolo-base
   environment:
     - NVIDIA_VISIBLE_DEVICES=all
     - NVIDIA_DRIVER_CAPABILITIES=all
+    - PYTHONPATH=/app:/workspace:${PYTHONPATH:-} 
 
 services:
   convert_model:
