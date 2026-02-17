@@ -27,11 +27,11 @@ services:
     <<: *yolo-base
     container_name: blurrerina
 
-  dev:
+  blurrerina_dev:
     <<: *yolo-base
     container_name: blurrerina_dev
     volumes:
-      - .:/workspace
       - /home/jetson/volume:/app/volume
+      - /home/jetson/Documents/blurrerina:/workspace:cached
     working_dir: /workspace
     entrypoint: ["/bin/bash", "-c", "sleep infinity"]

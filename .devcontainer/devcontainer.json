@@ -1,9 +1,8 @@
 {
-  "name": "DeepStream Jetson Dev",
-  "dockerComposeFile": "../docker-compose.yml",
+  "name": "Blurrerina Jetson Dev",
+  "dockerComposeFile": "../docker-compose.yaml",
   "service": "blurrerina_dev",
   "workspaceFolder": "/workspace",
-
   "customizations": {
     "vscode": {
       "settings": {
@@ -15,7 +14,9 @@
       }
     }
   },
-
   "remoteUser": "root",
+  "remoteEnv": {
+    "GIT_EDITOR": "code --wait"
+  },
   "postCreateCommand": "uv pip install pyds-stubs"
 }
