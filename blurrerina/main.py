@@ -5,13 +5,78 @@ gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 import os
 import pyds
+import numpy as np
+import cv2
+import ctypes
 
 import time
-import shutil
 
 # Classes to blur (check your labels.txt)
 # Usually 0 is person. If you see boxes but no blurring, check your class IDs.
 TARGET_CLASSES = [0, 2] 
+
+# Blur kernel size - higher = more blur
+BLUR_KERNEL_SIZE = 51
+
+def apply_blur_to_frame(frame_meta, gst_buffer):
+    """Apply blur to detected objects in the frame"""
+    # Get the buffer surface
+    n_frame = pyds.get_nvds_buf_surface(hash(gst_buffer), frame_meta.batch_id)
+    
+    # Get frame dimensions
+    frame_height = frame_meta.source_frame_height
+    frame_width = frame_meta.source_frame_width
+    
+    # Collect bounding boxes to blur
+    l_obj = frame_meta.obj_meta_list
+    boxes_to_blur = []
+    
+    while l_obj is not None:
+        try:
+            obj_meta = pyds.NvDsObjectMeta.cast(l_obj.data)
+        except StopIteration:
+            break
+        
+        if obj_meta.class_id in TARGET_CLASSES:
+            left = int(obj_meta.rect_params.left)
+            top = int(obj_meta.rect_params.top)
+            width = int(obj_meta.rect_params.width)
+            height = int(obj_meta.rect_params.height)
+            boxes_to_blur.append((left, top, width, height))
+        
+        try:
+            l_obj = l_obj.next
+        except StopIteration:
+            break
+    
+    # If no boxes to blur, return early
+    if not boxes_to_blur:
+        return
+    
+    # Convert buffer to numpy array (RGBA format)
+    frame_copy = np.array(n_frame, copy=True, order='C')
+    frame_copy = cv2.cvtColor(frame_copy, cv2.COLOR_RGBA2BGRA)
+    
+    # Apply blur to each box
+    for left, top, width, height in boxes_to_blur:
+        # Ensure coordinates are within frame bounds
+        left = max(0, left)
+        top = max(0, top)
+        right = min(frame_width, left + width)
+        bottom = min(frame_height, top + height)
+        
+        if right > left and bottom > top:
+            # Extract region
+            roi = frame_copy[top:bottom, left:right]
+            if roi.size > 0:
+                # Apply Gaussian blur
+                blurred_roi = cv2.GaussianBlur(roi, (BLUR_KERNEL_SIZE, BLUR_KERNEL_SIZE), 0)
+                # Replace region
+                frame_copy[top:bottom, left:right] = blurred_roi
+    
+    # Convert back and copy to buffer
+    frame_copy = cv2.cvtColor(frame_copy, cv2.COLOR_BGRA2RGBA)
+    np.copyto(n_frame, frame_copy)
 
 def pgie_src_pad_buffer_probe(pad, info, u_data):
     gst_buffer = info.get_buffer()
@@ -20,38 +85,21 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
 
     batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(gst_buffer))
     l_frame = batch_meta.frame_meta_list
+    
     while l_frame is not None:
         try:
             frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data)
         except StopIteration:
             break
-
-        l_obj = frame_meta.obj_meta_list
-        while l_obj is not None:
-            try:
-                obj_meta = pyds.NvDsObjectMeta.cast(l_obj.data)
-            except StopIteration:
-                break
-
-            # Modifica gli oggetti delle classi target per oscurarli
-            if obj_meta.class_id in TARGET_CLASSES:
-                # Modifichiamo direttamente rect_params dell'oggetto per renderlo un rettangolo nero
-                obj_meta.rect_params.border_width = 0
-                obj_meta.rect_params.has_bg_color = 1
-                obj_meta.rect_params.bg_color.set(0.0, 0.0, 0.0, 1.0)  # Nero opaco
-                
-                # Rimuoviamo il testo dell'etichetta
-                obj_meta.text_params.display_text = ""
-                obj_meta.text_params.set_bg_clr = 0
-
-            try:
-                l_obj = l_obj.next
-            except StopIteration:
-                break
+        
+        # Apply blur to frame
+        apply_blur_to_frame(frame_meta, gst_buffer)
+        
         try:
             l_frame = l_frame.next
         except StopIteration:
             break
+    
     return Gst.PadProbeReturn.OK
 
 def main():
@@ -68,15 +116,18 @@ def main():
         print(f"Input file {input_file} not found!")
         return
 
-    # Jetson Orin Nano: hardware decoder, no hardware encoder
-    # Removed nvdsosd (pure overhead since we blank everything)
-    # Using avenc_mpeg4 (same as cv2.VideoWriter "mp4v")
+    # Pipeline with blur support
+    # - nvv4l2decoder: Hardware decoding
+    # - nvinfer: Object detection
+    # - nvvideoconvert: Convert to CPU-accessible format for blur probe
+    # - Probe attached after nvinfer to access detections and modify frame
     pipeline_str = f"""
         filesrc location={input_file} !
-        qtdemux ! h264parse ! nvv4l2decoder ! nvvideoconvert !
-        video/x-raw(memory:NVMM), format=NV12 !
+        qtdemux ! h264parse ! nvv4l2decoder ! 
         mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1080 !
         nvinfer name=pgie config-file-path={config_file} !
+        nvvideoconvert name=converter !
+        video/x-raw,format=RGBA !
         nvvideoconvert ! video/x-raw,format=I420 !
         avenc_mpeg4 bitrate=4000000 ! qtmux !
         filesink location={output_file}
@@ -85,10 +136,10 @@ def main():
     print(f"Constructing pipeline...")
     pipeline = Gst.parse_launch(pipeline_str)
 
-    # Optional: Attach probe to PGIE for metadata manipulation
-    pgie = pipeline.get_by_name("pgie")
-    pgie_src_pad = pgie.get_static_pad("src")
-    pgie_src_pad.add_probe(Gst.PadProbeType.BUFFER, pgie_src_pad_buffer_probe, 0)
+    # Attach probe to converter where buffer is in CPU-accessible RGBA format
+    converter = pipeline.get_by_name("converter")
+    converter_src_pad = converter.get_static_pad("src")
+    converter_src_pad.add_probe(Gst.PadProbeType.BUFFER, pgie_src_pad_buffer_probe, 0)
 
     loop = GLib.MainLoop()
     bus = pipeline.get_bus()
