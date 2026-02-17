@@ -20,7 +20,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     /opt/nvidia/deepstream/deepstream/user_additional_install.sh
 
 COPY --chmod=755 scripts/install_pyds.sh .
-RUN ./install_pyds.sh -v 1.2.0
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    ./install_pyds.sh -v 1.2.0
 
 # Solves warnings about missing codecs when running GStreamer
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -40,7 +43,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN git clone --depth 1 https://github.com/marcoslucianops/DeepStream-Yolo.git DeepStream-Yolo
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install onnxscript onnxslim "ultralytics[export]"
+    uv pip install onnxscript onnxslim "ultralytics[export]" opencv-python-headless
 
 COPY --chmod=755 scripts/convert_model.sh .
 COPY --chmod=755 scripts/make_yolo_parser.sh .
