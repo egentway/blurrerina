@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: DeepStream Debug (Container)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/workspace/blurrerina/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "/workspace:/app:${env:PYTHONPATH}",
+                "GST_DEBUG": "3", // Livello di log GStreamer (1: Error, 2: Warn, 3: Fixme)
+                "LD_LIBRARY_PATH": "/opt/nvidia/deepstream/deepstream/lib:${env:LD_LIBRARY_PATH}"
+            },
+            "args": []
+        }
+    ]
+}
