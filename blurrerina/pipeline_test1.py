@@ -17,14 +17,12 @@
 # limitations under the License.
 ################################################################################
 
-from pathlib import Path
 import sys
-
-sys.path.append('../')
-import os
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GLib, Gst
+
+from pathlib import Path
 
 from blurrerina.pipeline import Pipeline
 import utils.platform_info as platform_info
@@ -45,9 +43,17 @@ def main():
     pipeline = Pipeline(loop, "blurrerina")
 
     pipeline.make("filesrc", "source", properties={"location": str(input_file.resolve())})
+    pipeline.make("qtdemux", "qtdemux")
     pipeline.make("h264parse", "h264parse_dec")
     pipeline.make("nvv4l2decoder", "decoder")
-    pipeline.make("nvstreammux", "streammux", properties={"batch-size": 1, "width": 1920, "height": 1080, "batched-push-timeout": MUXER_BATCH_TIMEOUT_USEC})
+    pipeline.make("nvstreammux", "streammux", properties={
+        "batch-size": 1,
+        "width": 1920,
+        "height": 1080,
+        "batched-push-timeout": MUXER_BATCH_TIMEOUT_USEC,
+        "live-source": 0,
+        "sync-inputs": 1  # Sync inputs for file sources to prevent race conditions
+    })
     pipeline.make("nvinfer", "nvinfer", properties={"config-file-path": str(config_file.resolve())})
     pipeline.make("nvdsosd", "osd")
     pipeline.make("nvvideoconvert", "videoconvert")
@@ -64,9 +70,28 @@ def main():
     if not streammux_sinkpad:
         raise RuntimeError("Could not get sinkpad for streammux")
 
-    pipeline.link(["source", "h264parse_dec", "decoder"])
+    def on_pad_added(element, pad, data):
+        caps = pad.get_current_caps() or pad.query_caps()
+        if not caps:
+            print("[qtdemux] No caps on pad!", flush=True)
+            return
+        structure = caps.get_structure(0)
+        media_type = structure.get_name()
+        print(f"[qtdemux] Pad-added: {media_type} caps: {caps.to_string()}", flush=True)
+        # Only link video/x-h264 streams
+        if media_type == "video/x-h264":
+            sink_pad = data.get_static_pad("sink")
+            if not sink_pad.is_linked():
+                res = pad.link(sink_pad)
+                print(f"[qtdemux] Linked video/x-h264 pad: result={res}", flush=True)
+        else:
+            print(f"[qtdemux] Ignoring pad: {media_type}", flush=True)
+
+    pipeline.link(["source", "qtdemux"])
+    pipeline["qtdemux"].connect("pad-added", on_pad_added, pipeline["h264parse_dec"])
+    pipeline.link(["h264parse_dec", "decoder"])
     decoder_sourcepad.link(streammux_sinkpad)
-    pipeline.link(["nvinfer", "osd", "videoconvert", "x264enc", "h264parse_enc", "mp4mux", "filesink"])
+    pipeline.link(["streammux", "nvinfer", "osd", "videoconvert", "x264enc", "h264parse_enc", "mp4mux", "filesink"])
 
     # osdsinkpad = nvosd.get_static_pad("sink")
     # if not osdsinkpad:
@@ -74,8 +99,21 @@ def main():
 
     # osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, osd_sink_pad_buffer_probe, 0)
 
-    # start play back and listen to events
-    pipeline.pipeline.set_state(Gst.State.PLAYING)
+    # Start pipeline in PAUSED state to allow dynamic pad connections to complete
+    print("Setting pipeline to PAUSED...", flush=True)
+    ret = pipeline.pipeline.set_state(Gst.State.PAUSED)
+    if ret == Gst.StateChangeReturn.FAILURE:
+        raise RuntimeError("Unable to set the pipeline to PAUSED state")
+    
+    # Wait for state change to complete
+    ret = pipeline.pipeline.get_state(Gst.CLOCK_TIME_NONE)
+    if ret[0] == Gst.StateChangeReturn.FAILURE:
+        raise RuntimeError("Failed to reach PAUSED state")
+    
+    print("Pipeline PAUSED, setting to PLAYING...", flush=True)
+    ret = pipeline.pipeline.set_state(Gst.State.PLAYING)
+    if ret == Gst.StateChangeReturn.FAILURE:
+        raise RuntimeError("Unable to set the pipeline to PLAYING state")
     try:
         loop.run()
     except:
