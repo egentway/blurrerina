@@ -71,6 +71,23 @@ class Pipeline:
             if not success:
                 raise RuntimeError(f"Failed to link {elem_a.name} → {elem_b.name}")
     
+    def set_state(self, state: Gst.State):
+        self.logger.info(f"Setting {self} state to {state}")
+        ret = self.pipeline.set_state(state)
+        if ret == Gst.StateChangeReturn.FAILURE:
+            raise RuntimeError(f"Unable to set {self} to {state} state")
+
+    def first_start(self):
+        # Start pipeline in PAUSED state to allow dynamic pad connections to complete
+        self.set_state(Gst.State.PAUSED)
+        
+        # Wait for state change to complete
+        ret = self.pipeline.get_state(Gst.CLOCK_TIME_NONE)
+        if ret[0] == Gst.StateChangeReturn.FAILURE:
+            raise RuntimeError("Failed to reach PAUSED state")
+        
+        self.set_state(Gst.State.PLAYING)
+    
     @contextmanager
     def push_state(self, state):
         _, previous_state, _ = self.pipeline.get_state(0)
