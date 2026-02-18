@@ -16,6 +16,7 @@
   },
   "remoteUser": "root",
   "remoteEnv": {
+    "TZ": "Europe/Rome",
     "GIT_EDITOR": "code --wait"
   },
   "postCreateCommand": "uv pip install pyds-stubs",
