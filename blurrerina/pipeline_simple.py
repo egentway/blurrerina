@@ -33,6 +33,7 @@ def main():
     })
     pipeline.make("nvinfer", "nvinfer", properties={"config-file-path": str(paths.config_file.resolve())})
     pipeline.make("nvdsosd", "osd")
+    pipeline.make("nvvideoconvert", "post_conv")
     pipeline.make("fakesink", "sink")
 
     pipeline.link(["source", "decoder_bin"])
@@ -63,7 +64,7 @@ def main():
 
 
     pipeline["decoder_bin"].connect("pad-added", decodebin_on_pad_added, pipeline["streammux"])
-    pipeline.link(["streammux", "nvinfer", "osd", "sink"])
+    pipeline.link(["streammux", "nvinfer", "osd", "post_conv", "sink"])
 
     pipeline.first_start()
 
