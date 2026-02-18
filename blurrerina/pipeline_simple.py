@@ -1,7 +1,8 @@
 import sys
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GLib, Gst
+gi.require_version('GstPbutils', '1.0')
+from gi.repository import GLib, Gst, GstPbutils
 
 import datetime
 from pathlib import Path
@@ -34,7 +35,8 @@ def main():
     pipeline.make("nvinfer", "nvinfer", properties={"config-file-path": str(paths.config_file.resolve())})
     pipeline.make("nvdsosd", "osd")
     pipeline.make("nvvideoconvert", "post_conv")
-    pipeline.make("fakesink", "sink")
+    pipeline.make("encodebin", "encoder_bin", properties={"profile": make_h264_mp4_profile()})
+    pipeline.make("filesink", "sink", properties={"location": str(paths.output_file.resolve()), "sync": False})
 
     pipeline.link(["source", "decoder_bin"])
 
@@ -64,7 +66,7 @@ def main():
 
 
     pipeline["decoder_bin"].connect("pad-added", decodebin_on_pad_added, pipeline["streammux"])
-    pipeline.link(["streammux", "nvinfer", "osd", "post_conv", "sink"])
+    pipeline.link(["streammux", "nvinfer", "osd", "post_conv", "encoder_bin", "sink"])
 
     pipeline.first_start()
 
@@ -75,6 +77,33 @@ def main():
 
     pipeline.set_state(Gst.State.NULL)
 
+
+def make_h264_mp4_profile():
+    # 1. create encoding profile
+    # we define we want an h264 video in an mp4 container (quicktime)
+    container_caps = Gst.Caps.from_string("video/quicktime")
+    video_caps = Gst.Caps.from_string("video/x-h264")
+
+    # forces the output to be raw video in RAM
+    # in this way, encodebin doesn't try to use the hardware encoder
+    # that isn't present in the Jetson Orin Nano
+    restriction_caps = Gst.Caps.from_string("video/x-raw")
+    # crate the container profile and add the video profile
+    container_profile = GstPbutils.EncodingContainerProfile.new(
+        "mp4_profile", 
+        "Blurrerina Output", 
+        container_caps, 
+        None
+    )
+    video_profile = GstPbutils.EncodingVideoProfile.new(
+        video_caps,
+        None,
+        None, # restriction_caps,
+        0
+    )
+    container_profile.add_profile(video_profile)
+
+    return container_profile
 
 if __name__ == '__main__':
     main()
