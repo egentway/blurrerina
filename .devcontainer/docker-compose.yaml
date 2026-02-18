@@ -1,0 +1,13 @@
+services:
+  blurrerina_dev:
+    extends:
+      file: ../docker-compose.yaml
+      service: blurrerina
+    environment:
+      - GST_DEBUG=3
+    container_name: blurrerina_dev
+    volumes:
+      - /home/jetson/volume:/app/volume
+      - /home/jetson/Documents/blurrerina:/workspace:cached
+    working_dir: /workspace
+    entrypoint: ["/bin/bash", "-c", "sleep infinity"]
