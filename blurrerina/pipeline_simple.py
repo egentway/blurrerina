@@ -31,6 +31,8 @@ def main():
         "batched-push-timeout": 40000, # 40ms (standard)
         "live-source": 0               # 0 for files, 1 for cameras
     })
+    pipeline.make("nvinfer", "nvinfer", properties={"config-file-path": str(paths.config_file.resolve())})
+    pipeline.make("nvdsosd", "osd")
     pipeline.make("fakesink", "sink")
 
     pipeline.link(["source", "decoder_bin"])
@@ -61,7 +63,7 @@ def main():
 
 
     pipeline["decoder_bin"].connect("pad-added", decodebin_on_pad_added, pipeline["streammux"])
-    pipeline.link(["streammux", "sink"])
+    pipeline.link(["streammux", "nvinfer", "osd", "sink"])
 
     pipeline.first_start()
 
