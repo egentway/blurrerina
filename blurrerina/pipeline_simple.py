@@ -46,7 +46,7 @@ def main():
             # stream type is not video
             return
 
-        sink_pad = data.get_request_pad("sink_0")
+        sink_pad = data.request_pad_simple("sink_0")
 
         if not sink_pad:
             logger.error('[decodebin] Could not obtain sink pad "sink_0" from nvstreammux')
