@@ -23,7 +23,7 @@ class Pipeline:
         self._setup_bus()
     
     def __repr__(self):
-        return f"{__name__}.{self.__class__.__name__}({self.pipeline.name})"
+        return f'{self.__class__.__name__}("{self.pipeline.name}")'
     
     def _setup_bus(self):
         bus = self.pipeline.get_bus()
