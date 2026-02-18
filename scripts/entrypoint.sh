@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+# set -euo pipefail
 
 echo "Blurrerina 💃"
-python3 blurrerina/main.py
-exec /bin/bash
+cmd='python3 blurrerina/pipeline_simple.py'
+echo "Running $cmd"
+eval $cmd
