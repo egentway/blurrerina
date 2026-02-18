@@ -14,7 +14,6 @@ class Pipeline:
     Pythonic wrapper to Gst.Pipeline
     """
     def __init__(self, loop: GLib.MainLoop, name: str | None = None):
-        Gst.init(None)
         self.loop = loop
         self.pipeline = Gst.Pipeline(name)
         if not self.pipeline:
