@@ -25,11 +25,11 @@ def main():
     pipeline.make("filesrc", "source", properties={ "location": str(paths.input_file.resolve()) })
     pipeline.make("decodebin", "decoder_bin")
     pipeline.make("nvstreammux", "streammux", {
-        "width": 1920,        # Larghezza output desiderata
-        "height": 1080,       # Altezza output desiderata
-        "batch-size": 1,      # Numero di sorgenti (1 nel tuo caso)
+        "width": 1920,                 # output width
+        "height": 1080,                # output height
+        "batch-size": 1,               # has to match size in config_infer.txt
         "batched-push-timeout": 40000, # 40ms (standard)
-        "live-source": 0      # 0 per file, 1 per telecamere RTSP
+        "live-source": 0               # 0 for files, 1 for cameras
     })
     pipeline.make("fakesink", "sink")
 
