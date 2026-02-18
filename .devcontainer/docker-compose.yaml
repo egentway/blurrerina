@@ -5,6 +5,7 @@ services:
       service: blurrerina
     environment:
       - GST_DEBUG=3
+      - EGL_PLATFORM=surfaceless
     container_name: blurrerina_dev
     volumes:
       - /home/jetson/volume:/app/volume
