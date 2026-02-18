@@ -22,6 +22,7 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GLib, Gst
 
+import datetime
 from pathlib import Path
 
 from blurrerina.pipeline import Pipeline
@@ -31,9 +32,14 @@ import pyds
 
 MUXER_BATCH_TIMEOUT_USEC = 33000
 
+def make_output_filename():
+    datestr = datetime.datetime.now().strftime(r'%Y%m%d_%H%M%S')
+    return f"output_{datestr}.mp4"
+
+
 base_path = Path("/app/volume")
 input_file = base_path / "data/input.mp4"
-output_file = base_path / "output/output.mp4"
+output_file = base_path / "output" / make_output_filename()
 config_file = base_path / "config/config_infer_primary.txt"
 models_path = base_path / "models"
 
