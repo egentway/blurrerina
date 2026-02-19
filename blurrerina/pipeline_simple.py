@@ -81,26 +81,16 @@ def main():
 
 
 def make_h264_mp4_profile():
-    # 1. create encoding profile
-    # we define we want an h264 video in an mp4 container (quicktime)
-    container_caps = Gst.Caps.from_string("video/quicktime")
-    video_caps = Gst.Caps.from_string("video/x-h264")
-
-    # forces the output to be raw video in RAM
-    # in this way, encodebin doesn't try to use the hardware encoder
-    # that isn't present in the Jetson Orin Nano
-    restriction_caps = Gst.Caps.from_string("video/x-raw")
-    # crate the container profile and add the video profile
     container_profile = GstPbutils.EncodingContainerProfile.new(
         "mp4_profile", 
         "Blurrerina Output", 
-        container_caps, 
+        Gst.Caps.from_string("video/quicktime")
         None
     )
     video_profile = GstPbutils.EncodingVideoProfile.new(
-        video_caps,
+        Gst.Caps.from_string("video/x-h264"),
         None,
-        None, # restriction_caps,
+        None,
         0
     )
     container_profile.add_profile(video_profile)
