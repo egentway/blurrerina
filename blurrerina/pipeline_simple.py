@@ -18,6 +18,7 @@ env var GST_PLUGIN_FEATURE_RANK=nvv4l2h264enc:NONE,nvv4l2h265enc:NONE.
 Use nvvideoconvert with copy-hw=2.
 """
 
+from blurrerina.utils.deepstream import scavenge_tensorrt_model
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GLib, Gst
@@ -77,6 +78,9 @@ def main():
         loop.run()
     finally:
         pipeline.set_state(Gst.State.NULL)
+        scavenge_tensorrt_model()
+
+        logger.info(f"END: {input_path=} {output_path=}")
 
 
 def decodebin_on_pad_added(element, pad, data):
