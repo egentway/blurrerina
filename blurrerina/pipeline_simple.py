@@ -51,7 +51,7 @@ def main():
     pipeline.make("nvinfer", "nvinfer", properties={"config-file-path": str(paths.config_file.resolve())})
 
     # custom bin for blurring (allows to just have a blur component instead of a bunch of logic here)
-    blur_bin = create_blurring_bin("blurrer", classes_to_blur=[0])
+    blur_bin = create_blurring_bin("blurrer", classes_to_blur=[0, 1])
     pipeline.pipeline.add(blur_bin)
 
     # copy-hw: 2 is necessary to avoid memory errors with software encoding

@@ -10,8 +10,8 @@
 set -euo pipefail
 
 WORKDIR="/app"
-MODEL_VERSION=yoloV8
-MODEL_PATH="$WORKDIR/volume/models/yolov8n.pt"
+MODEL_VERSION=yolo11
+MODEL_PATH="$WORKDIR/volume/models/model.pt"
 MODEL_DIR=$(dirname "$MODEL_PATH")
 MODEL_NAME=$(basename "$MODEL_PATH" .pt)
 
@@ -26,5 +26,4 @@ cd "$MODEL_DIR"
 python3 $EXPORT_SCRIPT \
   --simplify \
   --opset 18 \
-  --size 640 640 \
   -w "$MODEL_PATH"
