@@ -34,7 +34,9 @@ def main():
     })
     pipeline.make("nvinfer", "nvinfer", properties={"config-file-path": str(paths.config_file.resolve())})
     pipeline.make("nvdsosd", "osd")
-    pipeline.make("nvvideoconvert", "post_conv")
+    # copy-hw: 2 is necessary to avoid memory errors with software encoding
+    # see https://forums.developer.nvidia.com/t/deepstream-sdk-faq/80236/61
+    pipeline.make("nvvideoconvert", "post_conv", properties={ "copy-hw": 2 })
     pipeline.make("encodebin", "encoder_bin", properties={"profile": make_h264_mp4_profile()})
     pipeline.make("filesink", "sink", properties={"location": str(paths.output_file.resolve()), "sync": False})
 
