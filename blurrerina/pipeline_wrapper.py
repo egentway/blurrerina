@@ -90,17 +90,3 @@ class PipelineWrapper:
         ret = self.pipeline.set_state(state)
         if ret == Gst.StateChangeReturn.FAILURE:
             raise RuntimeError(f"Unable to set {self} to {state} state")
-
-    def first_start(self):
-        """
-        Runs the pipeline.
-        """
-        # Start pipeline in PAUSED state to allow dynamic pad connections to complete
-        self.set_state(Gst.State.PAUSED)
-        
-        # Wait for state change to complete
-        ret = self.pipeline.get_state(Gst.CLOCK_TIME_NONE)
-        if ret[0] == Gst.StateChangeReturn.FAILURE:
-            raise RuntimeError("Failed to reach PAUSED state")
-        
-        self.set_state(Gst.State.PLAYING)

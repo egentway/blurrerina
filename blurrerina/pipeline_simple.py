@@ -44,14 +44,12 @@ def main():
     pipeline["decoder_bin"].connect("pad-added", decodebin_on_pad_added, pipeline["streammux"])
     pipeline.link(["streammux", "nvinfer", "osd", "post_conv", "encoder_bin", "sink"])
 
-    pipeline.first_start()
+    pipeline.set_state(Gst.State.PLAYING)
 
     try:
         loop.run()
-    except:
-        pass
-
-    pipeline.set_state(Gst.State.NULL)
+    finally:
+        pipeline.set_state(Gst.State.NULL)
 
 def decodebin_on_pad_added(element, pad, data):
     """
