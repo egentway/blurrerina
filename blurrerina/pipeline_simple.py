@@ -1,3 +1,23 @@
+"""
+A simple blurring pipeline that is runnable as a script.
+
+This is meant to provide a simple script to blur certain elements
+detected through an object detection model like YOLO, and to document
+how to do that on the Jetson Orin Nano.
+
+The main things to be careful on the Orin Nano as of Jetpack Linux 36 are:
+
+1. Lack of hardware encoder
+
+This requires, if high-level bins such as encodebin are used, to derank
+the GStreamer hardware encoding plugins. This can be done exporting the
+env var GST_PLUGIN_FEATURE_RANK=nvv4l2h264enc:NONE,nvv4l2h265enc:NONE.
+
+2. Memory conversion using software encoder
+
+Use nvvideoconvert with copy-hw=2.
+"""
+
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GLib, Gst
