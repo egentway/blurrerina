@@ -3,7 +3,7 @@ gi.require_version('Gst', '1.0')
 gi.require_version('GstPbutils', '1.0')
 from gi.repository import GLib, Gst, GstPbutils
 
-from blurrerina.pipeline import PipelineWrapper
+from blurrerina.pipeline_wrapper import PipelineWrapper
 import blurrerina.paths as paths
 
 import logging
