@@ -21,10 +21,10 @@ def main():
     pipeline = Pipeline(loop, "blurrerina-simple")
 
     input_path = str(paths.input_file.resolve())
-    logger.info(f"{input_path=}")
+    output_path = str(paths.output_file.resolve())
+    logger.info(f"{input_path=} {output_path=}")
 
-    pipeline.make("filesrc", "source", properties={ "location": str(paths.input_file.resolve()) })
-    pipeline.make("decodebin", "decoder_bin")
+    pipeline.make("uridecodebin", "decoder_bin", properties={ "uri": f"file://{input_path}" })
     pipeline.make("nvstreammux", "streammux", {
         "width": 1920,                 # output width
         "height": 1080,                # output height
@@ -34,13 +34,17 @@ def main():
     })
     pipeline.make("nvinfer", "nvinfer", properties={"config-file-path": str(paths.config_file.resolve())})
     pipeline.make("nvdsosd", "osd")
+
     # copy-hw: 2 is necessary to avoid memory errors with software encoding
     # see https://forums.developer.nvidia.com/t/deepstream-sdk-faq/80236/61
     pipeline.make("nvvideoconvert", "post_conv", properties={ "copy-hw": 2 })
-    pipeline.make("encodebin", "encoder_bin", properties={"profile": make_h264_mp4_profile()})
-    pipeline.make("filesink", "sink", properties={"location": str(paths.output_file.resolve()), "sync": False})
 
-    pipeline.link(["source", "decoder_bin"])
+    # on the Jetson Orin Nano, encodebin will try to use the hardware encoder and fail,
+    # since this model doesn't have one. To make this use the software encoder, you need
+    # to export the env var GST_PLUGIN_FEATURE_RANK=nvv4l2h264enc:NONE,nvv4l2h265enc:NONE
+    pipeline.make("encodebin", "encoder_bin", properties={"profile": make_h264_mp4_profile()})
+
+    pipeline.make("filesink", "sink", properties={"location": output_path, "sync": False})
 
     def decodebin_on_pad_added(element, pad, data):
         caps = pad.get_current_caps() or pad.query_caps()
