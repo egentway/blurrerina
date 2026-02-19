@@ -1,14 +1,9 @@
-import sys
 import gi
 gi.require_version('Gst', '1.0')
 gi.require_version('GstPbutils', '1.0')
 from gi.repository import GLib, Gst, GstPbutils
 
-import datetime
-from pathlib import Path
-import pyds
-
-from blurrerina.pipeline import Pipeline
+from blurrerina.pipeline import PipelineWrapper
 import blurrerina.paths as paths
 
 import logging
@@ -18,7 +13,7 @@ logger = logging.getLogger(__name__)
 def main():
     Gst.init(None)
     loop = GLib.MainLoop()
-    pipeline = Pipeline(loop, "blurrerina-simple")
+    pipeline = PipelineWrapper(Gst.Pipeline(name="blurrerina"), loop)
 
     input_path = str(paths.input_file.resolve())
     output_path = str(paths.output_file.resolve())
@@ -46,31 +41,6 @@ def main():
 
     pipeline.make("filesink", "sink", properties={"location": output_path, "sync": False})
 
-    def decodebin_on_pad_added(element, pad, data):
-        caps = pad.get_current_caps() or pad.query_caps()
-        structure = caps.get_structure(0)
-        media_type = structure.get_name()
-        
-        if "video/x-raw" not in media_type:
-            # stream type is not video
-            return
-
-        sink_pad = data.request_pad_simple("sink_0")
-
-        if not sink_pad:
-            logger.error('[decodebin] Could not obtain sink pad "sink_0" from nvstreammux')
-            return
-
-        if sink_pad.is_linked():
-            logger.info('[decodebin] pad already linked')
-
-        res = pad.link(sink_pad)
-        if res == Gst.PadLinkReturn.OK:
-            logger.info("[decodebin] Linked video pad to nvstreammux sink pad")
-        else:
-            logger.error(f"[decodebin] Video pad link failed with code {res}")
-
-
     pipeline["decoder_bin"].connect("pad-added", decodebin_on_pad_added, pipeline["streammux"])
     pipeline.link(["streammux", "nvinfer", "osd", "post_conv", "encoder_bin", "sink"])
 
@@ -83,16 +53,72 @@ def main():
 
     pipeline.set_state(Gst.State.NULL)
 
+def decodebin_on_pad_added(element, pad, data):
+    """
+    Callback for decodebin/uridecodebin.
+
+    GStreamer uses pads. They are points at which different elements can connect.
+    Pads can be sources or sinks, based on whether they send or receive data. 
+    You usually connect source pads to sink pads.
+
+    Most elements have static "src" and "sink" pads, which represent respectively their input
+    and output. In that case, you can use the `element.link(other_element)` API to implicitly
+    connect `element`'s `sink` pad to `other_element`'s source pad.
+
+    Other elements have dynamic sources and sinks, that get added while the application is in
+    execution. In that case, you use callbacks to plug directly the various source pads and sink pads
+    as they are added in elements.
+
+    This function takes care of requesting a new sink pad to `nvstreammux` each time a source pad
+    for `decodebin` is added, and plugging them together.
+    """
+    caps = pad.get_current_caps() or pad.query_caps()
+    structure = caps.get_structure(0)
+    media_type = structure.get_name()
+    
+    if "video/x-raw" not in media_type:
+        # stream type is not video
+        return
+
+    sink_pad = data.request_pad_simple("sink_0")
+
+    if not sink_pad:
+        logger.error('[decodebin] Could not obtain sink pad "sink_0" from nvstreammux')
+        return
+
+    if sink_pad.is_linked():
+        logger.info('[decodebin] pad already linked')
+
+    res = pad.link(sink_pad)
+    if res == Gst.PadLinkReturn.OK:
+        logger.info("[decodebin] Linked video pad to nvstreammux sink pad")
+    else:
+        logger.error(f"[decodebin] Video pad link failed with code {res}")
+
 
 def make_h264_mp4_profile():
+    """
+    Creates a profile for encodebin, that establishes the container, encoder and other
+    parameters for the produced video.
+    """
+
+    container_caps = Gst.Caps.from_string("video/quicktime")
+    if not container_caps:
+        raise RuntimeError("Could not create container_caps")
+
     container_profile = GstPbutils.EncodingContainerProfile.new(
         "mp4_profile", 
         "Blurrerina Output", 
-        Gst.Caps.from_string("video/quicktime"),
+        container_caps,
         None
     )
+
+    video_caps = Gst.Caps.from_string("video/x-h264")
+    if not video_caps:
+        raise RuntimeError("Could not create video_caps")
+
     video_profile = GstPbutils.EncodingVideoProfile.new(
-        Gst.Caps.from_string("video/x-h264"),
+        video_caps,
         None,
         None,
         0
