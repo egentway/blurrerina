@@ -88,7 +88,7 @@ def make_h264_mp4_profile():
     container_profile = GstPbutils.EncodingContainerProfile.new(
         "mp4_profile", 
         "Blurrerina Output", 
-        Gst.Caps.from_string("video/quicktime")
+        Gst.Caps.from_string("video/quicktime"),
         None
     )
     video_profile = GstPbutils.EncodingVideoProfile.new(
