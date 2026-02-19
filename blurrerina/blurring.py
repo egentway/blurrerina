@@ -6,6 +6,8 @@ from gi.repository import Gst
 import cv2
 import pyds
 
+from blurrerina.utils.gstreamer import raise_if_none
+
 
 def create_blurring_bin(name: str, classes_to_blur: list[int]):
     """
@@ -16,9 +18,9 @@ def create_blurring_bin(name: str, classes_to_blur: list[int]):
     bin = Gst.Bin.new(name)
 
     # 1. Elements
-    conv = Gst.ElementFactory.make("nvvideoconvert", f"{name}_conv")
-    caps = Gst.ElementFactory.make("capsfilter", f"{name}_caps")
-    caps.set_property("caps", Gst.Caps.from_string("video/x-raw(memory:NVMM), format=RGBA"))
+    conv = raise_if_none(Gst.ElementFactory.make, "nvvideoconvert", f"{name}_conv")
+    caps = raise_if_none(Gst.ElementFactory.make, "capsfilter", f"{name}_caps")
+    caps.set_property("caps", raise_if_none(Gst.Caps.from_string, "video/x-raw(memory:NVMM), format=RGBA"))
 
     # 2. Add to Bin
     bin.add(conv)
@@ -30,14 +32,15 @@ def create_blurring_bin(name: str, classes_to_blur: list[int]):
     # 4. Ghost Pads
     # Ghost pads are like references to other pads. 
     # They allow bins to pass their elements' pads as their own.
-    sink_pad = Gst.GhostPad.new("sink", conv.get_static_pad("sink"))
-    src_pad = Gst.GhostPad.new("src", caps.get_static_pad("src"))
+    sink_pad = Gst.GhostPad.new("sink", raise_if_none(conv.get_static_pad, "sink"))
+    caps_src_pad = raise_if_none(caps.get_static_pad, "src")
+    src_pad = Gst.GhostPad.new("src", caps_src_pad)
 
     bin.add_pad(sink_pad)
     bin.add_pad(src_pad)
 
     # 5. Add Probe
-    src_pad.add_probe(Gst.PadProbeType.BUFFER, make_blur_probe_callback(classes_to_blur), None)
+    caps_src_pad.add_probe(Gst.PadProbeType.BUFFER, make_blur_probe_callback(classes_to_blur), None)
 
     return bin
 
@@ -55,7 +58,7 @@ def make_blur_probe_callback(classes_to_blur):
         
         while l_frame is not None:
             try:
-                frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data)
+                frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data) # pyright: ignore
             except StopIteration:
                 break
 
@@ -66,7 +69,7 @@ def make_blur_probe_callback(classes_to_blur):
             l_obj = frame_meta.obj_meta_list
             while l_obj is not None:
                 try:
-                    obj_meta = pyds.NvDsObjectMeta.cast(l_obj.data)
+                    obj_meta = pyds.NvDsObjectMeta.cast(l_obj.data) # pyright: ignore
                 except StopIteration:
                     break
 

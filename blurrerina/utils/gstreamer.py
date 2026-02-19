@@ -4,6 +4,13 @@ gi.require_version('GstPbutils', '1.0')
 from gi.repository import Gst, GstPbutils
 
 
+def raise_if_none(fn, *args, **kwargs):
+    elem = fn(*args, **kwargs)
+    if elem is None:
+        raise RuntimeError(f"{fn}({', '.join(args)}) returned None")
+    return elem
+
+
 def make_h264_mp4_profile():
     """
     Creates a profile for encodebin, that establishes the container, encoder and other
@@ -16,23 +23,15 @@ def make_h264_mp4_profile():
     >> pipeline.make("encodebin", "encoder_bin", properties={"profile": make_h264_mp4_profile()})
     """
 
-    container_caps = Gst.Caps.from_string("video/quicktime")
-    if not container_caps:
-        raise RuntimeError("Could not create container_caps")
-
     container_profile = GstPbutils.EncodingContainerProfile.new(
         "mp4_profile", 
         "Blurrerina Output", 
-        container_caps,
+        raise_if_none(Gst.Caps.from_string, "video/quicktime"),
         None
     )
 
-    video_caps = Gst.Caps.from_string("video/x-h264")
-    if not video_caps:
-        raise RuntimeError("Could not create video_caps")
-
     video_profile = GstPbutils.EncodingVideoProfile.new(
-        video_caps,
+        raise_if_none(Gst.Caps.from_string, "video/x-h264"),
         None,
         None,
         0
