@@ -2,8 +2,9 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GLib, Gst
 
-from blurrerina.pipeline_wrapper import PipelineWrapper
 import blurrerina.paths as paths
+from blurrerina.pipeline_wrapper import PipelineWrapper
+from blurrerina.blurring import create_blurring_bin
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -27,7 +28,10 @@ def main():
         "live-source": 0               # 0 for files, 1 for cameras
     })
     pipeline.make("nvinfer", "nvinfer", properties={"config-file-path": str(paths.config_file.resolve())})
-    pipeline.make("nvdsosd", "osd")
+
+    # custom bin for blurring (allows to just have a blur component instead of a bunch of logic here)
+    blur_bin = create_blurring_bin("blurrer", classes_to_blur=[0])
+    pipeline.pipeline.add(blur_bin)
 
     # copy-hw: 2 is necessary to avoid memory errors with software encoding
     # see https://forums.developer.nvidia.com/t/deepstream-sdk-faq/80236/61
@@ -45,7 +49,7 @@ def main():
 
     pipeline["decoder_bin"].connect("pad-added", decodebin_on_pad_added, pipeline["streammux"])
 
-    pipeline.link(["streammux", "nvinfer", "osd", "post_conv", "x264enc", "muxer", "sink"])
+    pipeline.link(["streammux", "nvinfer", blur_bin, "post_conv", "x264enc", "muxer", "sink"])
 
     pipeline.set_state(Gst.State.PLAYING)
 

@@ -7,6 +7,41 @@ import cv2
 import pyds
 
 
+def create_blurring_bin(name: str, classes_to_blur: list[int]):
+    """
+    Factory function to create a Gst.Bin that encapsulates blurring logic.
+
+    A bin is an element made of a collection of other elements.
+    """
+    bin = Gst.Bin.new(name)
+
+    # 1. Elements
+    conv = Gst.ElementFactory.make("nvvideoconvert", f"{name}_conv")
+    caps = Gst.ElementFactory.make("capsfilter", f"{name}_caps")
+    caps.set_property("caps", Gst.Caps.from_string("video/x-raw(memory:NVMM), format=RGBA"))
+
+    # 2. Add to Bin
+    bin.add(conv)
+    bin.add(caps)
+
+    # 3. Link
+    conv.link(caps)
+
+    # 4. Ghost Pads
+    # Ghost pads are like references to other pads. 
+    # They allow bins to pass their elements' pads as their own.
+    sink_pad = Gst.GhostPad.new("sink", conv.get_static_pad("sink"))
+    src_pad = Gst.GhostPad.new("src", caps.get_static_pad("src"))
+
+    bin.add_pad(sink_pad)
+    bin.add_pad(src_pad)
+
+    # 5. Add Probe
+    src_pad.add_probe(Gst.PadProbeType.BUFFER, make_blur_probe_callback(classes_to_blur), None)
+
+    return bin
+
+
 def make_blur_probe_callback(classes_to_blur):
 
     def blur_probe_callback(pad, info, u_data=None):
@@ -14,7 +49,7 @@ def make_blur_probe_callback(classes_to_blur):
         if not gst_buffer:
             return Gst.PadProbeReturn.OK
 
-        # Estrai i metadati della batch
+        # extract metadata from batch
         batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(gst_buffer))
         l_frame = batch_meta.frame_meta_list
         
@@ -24,8 +59,8 @@ def make_blur_probe_callback(classes_to_blur):
             except StopIteration:
                 break
 
-            # Ottieni il frame come array NumPy (mappa la memoria NVMM)
-            # Nota: n_frame è una "view" sulla memoria originale, modificarlo cambia il video
+            # obtain frame as numpy array (maps NVMM memory)
+            # n_frame is a "view" on the original memory, changing it modifies the video
             n_frame = pyds.get_nvds_buf_surface(hash(gst_buffer), frame_meta.batch_id)
             
             l_obj = frame_meta.obj_meta_list
@@ -35,8 +70,7 @@ def make_blur_probe_callback(classes_to_blur):
                 except StopIteration:
                     break
 
-                # FILTRO: Puoi decidere cosa sfocare (es: class_id 0 per persone)
-                # if obj_meta.class_id == 0:
+                # filters which classes to blur
                 if obj_meta.class_id in classes_to_blur:
                     apply_blur_to_object(n_frame, obj_meta.rect_params)
 
@@ -67,6 +101,6 @@ def apply_blur_to_object(frame, rect_params):
 
     if (right > left) and (bottom > top):
         roi = frame[top:bottom, left:right]
-        # Kernel (51, 51) for a heavy blur. needs to be not even
+        # Kernel (51, 51) for a heavy blur. Needs to be odd
         blurred_roi = cv2.GaussianBlur(roi, (51, 51), 0)
         frame[top:bottom, left:right] = blurred_roi
